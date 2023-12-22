@@ -1,0 +1,2 @@
+- to turn ui file into code in python using:
++ pyuic5 -x test.ui -0 test.py
