@@ -58,6 +58,8 @@ class Ui_MainWindow(object):
         self.actionCopy.triggered.connect(lambda: self.clicked("Copy was clicked"))
         self.actionPaste.triggered.connect(lambda: self.clicked("Paste was clicked"))
 
+        
+
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
