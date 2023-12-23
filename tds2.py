@@ -152,6 +152,7 @@ class Ui_MainWindow(object):
 
 
     def __tds_get_cookie(self, username: str, password: str, proxy_string = None):
+        # I'm Working here...
         target_url = "https://traodoisub.com/scr/login.php"
 
         form_data = {
