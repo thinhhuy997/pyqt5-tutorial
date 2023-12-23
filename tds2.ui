@@ -1,0 +1,233 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1064</width>
+    <height>605</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>MainWindow</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <widget class="QFrame" name="frame">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>10</y>
+      <width>741</width>
+      <height>80</height>
+     </rect>
+    </property>
+    <property name="font">
+     <font>
+      <pointsize>8</pointsize>
+      <weight>50</weight>
+      <bold>false</bold>
+     </font>
+    </property>
+    <property name="layoutDirection">
+     <enum>Qt::LeftToRight</enum>
+    </property>
+    <property name="frameShape">
+     <enum>QFrame::StyledPanel</enum>
+    </property>
+    <property name="frameShadow">
+     <enum>QFrame::Raised</enum>
+    </property>
+    <widget class="QPushButton" name="addAccountButton">
+     <property name="geometry">
+      <rect>
+       <x>20</x>
+       <y>20</y>
+       <width>101</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>Yu Gothic</family>
+       <pointsize>10</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Add accounts</string>
+     </property>
+    </widget>
+    <widget class="QPushButton" name="addProxyButton">
+     <property name="geometry">
+      <rect>
+       <x>130</x>
+       <y>20</y>
+       <width>101</width>
+       <height>31</height>
+      </rect>
+     </property>
+     <property name="font">
+      <font>
+       <family>Yu Gothic</family>
+       <pointsize>10</pointsize>
+       <weight>50</weight>
+       <bold>false</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Add Proxies</string>
+     </property>
+    </widget>
+   </widget>
+   <widget class="QTableWidget" name="tableWidget">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>130</y>
+      <width>1001</width>
+      <height>411</height>
+     </rect>
+    </property>
+    <row>
+     <property name="text">
+      <string>1</string>
+     </property>
+    </row>
+    <row>
+     <property name="text">
+      <string>2</string>
+     </property>
+    </row>
+    <column>
+     <property name="text">
+      <string>tds_username</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>tds_pass</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>face_uid</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>face_pass</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>cookie</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>token</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>proxy</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>user_agent</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>status</string>
+     </property>
+    </column>
+    <column>
+     <property name="text">
+      <string>action</string>
+     </property>
+    </column>
+    <item row="0" column="0">
+     <property name="text">
+      <string>tds-user1</string>
+     </property>
+    </item>
+    <item row="0" column="1">
+     <property name="text">
+      <string>tds-pass1</string>
+     </property>
+    </item>
+    <item row="0" column="2">
+     <property name="text">
+      <string>61552711387154</string>
+     </property>
+    </item>
+    <item row="0" column="3">
+     <property name="text">
+      <string>buichieu2im</string>
+     </property>
+    </item>
+    <item row="0" column="4">
+     <property name="text">
+      <string>cookie-str-1</string>
+     </property>
+    </item>
+    <item row="1" column="0">
+     <property name="text">
+      <string>tds-user2</string>
+     </property>
+    </item>
+    <item row="1" column="1">
+     <property name="text">
+      <string>tds-pass2</string>
+     </property>
+    </item>
+    <item row="1" column="2">
+     <property name="text">
+      <string>61552997995019</string>
+     </property>
+    </item>
+    <item row="1" column="3">
+     <property name="text">
+      <string>hoangbinh0dj</string>
+     </property>
+    </item>
+    <item row="1" column="4">
+     <property name="text">
+      <string>cookie-str-2</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QLabel" name="label">
+    <property name="geometry">
+     <rect>
+      <x>30</x>
+      <y>90</y>
+      <width>741</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>File:</string>
+    </property>
+   </widget>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>1064</width>
+     <height>21</height>
+    </rect>
+   </property>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

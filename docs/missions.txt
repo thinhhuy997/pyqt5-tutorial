@@ -1,0 +1,4 @@
+tạo acc tds dựa vào api dùng api lấy xu về hiện lên data table
+lấy cookie và token của acc tds nhưng không hiện lên data table
+thêm nút run ở action - click - di lấy cookie -> có cookie thì lấy token
+và sử dụng thêm các api khác traodoisub
