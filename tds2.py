@@ -17,7 +17,7 @@ import requests
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1064, 605)
+        MainWindow.resize(1200, 605)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.frame = QtWidgets.QFrame(self.centralwidget)
@@ -50,15 +50,18 @@ class Ui_MainWindow(object):
         self.addProxyButton.setFont(font)
         self.addProxyButton.setObjectName("addProxyButton")
         self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
-        self.tableWidget.setGeometry(QtCore.QRect(30, 130, 1001, 411))
+        self.tableWidget.setGeometry(QtCore.QRect(30, 130, 1150, 411))
         self.tableWidget.setObjectName("tableWidget")
-        self.tableWidget.setColumnCount(10)
+
+        self.tableWidget.setColumnCount(11)
+
         # self.tableWidget.setRowCount(2)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setVerticalHeaderItem(0, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setVerticalHeaderItem(1, item)
         item = QtWidgets.QTableWidgetItem()
+
         self.tableWidget.setHorizontalHeaderItem(0, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(1, item)
@@ -79,6 +82,10 @@ class Ui_MainWindow(object):
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(9, item)
         item = QtWidgets.QTableWidgetItem()
+        self.tableWidget.setHorizontalHeaderItem(10, item)
+
+
+        item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setItem(0, 0, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setItem(0, 1, item)
@@ -98,13 +105,17 @@ class Ui_MainWindow(object):
         self.tableWidget.setItem(1, 3, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setItem(1, 4, item)
+
         self.label = QtWidgets.QLabel(self.centralwidget)
         self.label.setGeometry(QtCore.QRect(30, 90, 741, 16))
         self.label.setObjectName("label")
+
         MainWindow.setCentralWidget(self.centralwidget)
+
         self.menubar = QtWidgets.QMenuBar(MainWindow)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 1064, 21))
         self.menubar.setObjectName("menubar")
+
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
         self.statusbar.setObjectName("statusbar")
@@ -118,6 +129,7 @@ class Ui_MainWindow(object):
         self.addProxyButton.clicked.connect(self.add_proxies_from_file)
 
         self.accounts = []
+        self.base_url = "https://traodoisub.com"
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -141,9 +153,13 @@ class Ui_MainWindow(object):
         item.setText(_translate("MainWindow", "proxy"))
         item = self.tableWidget.horizontalHeaderItem(7)
         item.setText(_translate("MainWindow", "user_agent"))
+
         item = self.tableWidget.horizontalHeaderItem(8)
-        item.setText(_translate("MainWindow", "status"))
+        item.setText(_translate("MainWindow", "tds_coins"))
+
         item = self.tableWidget.horizontalHeaderItem(9)
+        item.setText(_translate("MainWindow", "status"))
+        item = self.tableWidget.horizontalHeaderItem(10)
         item.setText(_translate("MainWindow", "action"))
         __sortingEnabled = self.tableWidget.isSortingEnabled()
         self.tableWidget.setSortingEnabled(False)
@@ -151,7 +167,7 @@ class Ui_MainWindow(object):
         self.label.setText(_translate("MainWindow", "File:"))
 
 
-    def __tds_get_cookie(self, username: str, password: str, proxy_string = None):
+    def __tds_get_cookie(self, username: str, password: str, proxy_string = None) -> str:
         # I'm Working here...
         target_url = "https://traodoisub.com/scr/login.php"
 
@@ -176,11 +192,57 @@ class Ui_MainWindow(object):
             # Make a request without using the proxy
             response = requests.post(target_url, data=form_data)
 
-        print('response', response.text)
-        print('cookie', response.cookies.items())
-        
+        cookie_string = ""
+
         for key, value in response.cookies.items():
-            print(f"{key}: {value}")
+            cookie_string = f"{key}={value};"
+        
+        return cookie_string
+    
+    def __tds_get_token(self, cookie: str) -> str:
+        cookie_string = cookie.strip(";")
+
+        # Split the cookie string into key and value
+        cookie_key, cookie_value = cookie_string.split('=')
+
+        # Create a dictionary with the cookie
+        cookies = {cookie_key: cookie_value}
+
+        # Make the request with the cookies
+        response = requests.get("https://traodoisub.com/view/setting/load.php", cookies=cookies)
+
+        print('response', response.json())
+
+        response = response.json()
+
+        tds_token, tds_coins = response["tokentds"], response["xu"]
+
+        return tds_token, tds_coins
+    
+    def __tds_configure_facebook(self, facebook_id="", tds_token="", proxy_string = None):
+        # response = requests.get(f'https://traodoisub.com/api/?fields=run&id={facebook_id}&access_token={tds_token}')
+        # EX: https://traodoisub.com/api/?fields=run&id=100012702276792&access_token=TDS9JCOyVmdlNnI6IiclZXZzJCLiEzYjFGdzVGdzRGdiojIyV2c1Jye
+        print('tds_token', tds_token)
+
+        target_url = f"{self.base_url}/api/?fields=run&id={facebook_id}&access_token={tds_token}"
+
+        if proxy_string:
+            # Parse the proxy components
+            ip, port, username, password = proxy_string.split(":")
+            proxy_url = f"http://{username}:{password}@{ip}:{port}"
+
+            proxies = {
+                "http": proxy_url,
+                "https": proxy_url,
+            }
+
+            # Make a request using the proxy
+            response = requests.get(target_url, proxies=proxies)
+        else:
+            # Make a request without using the proxy
+            response = requests.get(target_url)
+
+        print("__tds_configure_facebook - response: ", response.json())
 
     def on_run_button_clicked(self, row, col):
         # print(f"Button clicked at Row: {row}, Column: {col}")
@@ -191,16 +253,29 @@ class Ui_MainWindow(object):
 
         print(f"Getting cookie for the account with username: '{username}' and password: '{password}'")
 
-        self.__tds_get_cookie(username=username, password=password, proxy_string=proxy_string)
+        tds_cookie = self.__tds_get_cookie(username=username, password=password, proxy_string=proxy_string)
 
-    def add_row(self, row_index, data):
+        self.accounts[row]["tds_cookie"] = tds_cookie
+        
+        tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
+
+        self.accounts[row]["tds_token"] = tds_token
+        self.accounts[row]["tds_coins"] = tds_coins
+
+        # update table with coins
+        self.add_accounts_to_table(self.accounts)
+
+        # add a facebook to the tds account
+        self.__tds_configure_facebook(facebook_id="100010822392588", tds_token=tds_token)
+
+    def add_row(self, row_index, data, column_order):
         _translate = QtCore.QCoreApplication.translate
-        for column_index, (key, value) in enumerate(data.items()):
-            
+        for column_index, key in enumerate(column_order):
+            value = data.get(key, "")
 
             if key == "action":
                 button = QPushButton(f"Run")
-                button.clicked.connect(lambda state, row=row_index: self.on_run_button_clicked(row, column_index))
+                button.clicked.connect(lambda state, row=row_index, col=column_index: self.on_run_button_clicked(row, col))
                 self.tableWidget.setCellWidget(row_index, column_index, button)
             else:
                 item = QtWidgets.QTableWidgetItem()
@@ -208,11 +283,20 @@ class Ui_MainWindow(object):
                 self.tableWidget.setItem(row_index, column_index, item)
 
     def add_accounts_to_table(self, accounts):
-        self.tableWidget.setRowCount(len(accounts))
-        __sortingEnabled = self.tableWidget.isSortingEnabled()
-        for row_index, account_data in enumerate(accounts):
-            self.add_row(row_index, account_data)
-        self.tableWidget.setSortingEnabled(__sortingEnabled)
+        try:
+            self.tableWidget.setRowCount(len(accounts))
+            __sortingEnabled = self.tableWidget.isSortingEnabled()
+
+            # Positions of field columns in the data table
+            column_order = ["tds_username", "tds_pass", "face_uid", "face_pass", "cookie", "token", "proxy", "user_agent", "tds_coins",  "status",  "action"]
+
+            for row_index, account_data in enumerate(accounts):
+                self.add_row(row_index, account_data, column_order)
+            self.tableWidget.setSortingEnabled(__sortingEnabled)
+
+            print('Added accounts successfully!')
+        except Exception as error:
+            print(error)
 
     def add_accounts_from_file(self):
         # Open file Dialog
@@ -250,7 +334,10 @@ class Ui_MainWindow(object):
             account_values = account_line.split('|')
             account_obj = {
                 "tds_username": account_values[0], 
-                "tds_pass": account_values[1], 
+                "tds_pass": account_values[1],
+                "tds_cookie": "",
+                "tds_token": "", # This is a traodoisub account access token
+                "tds_coins": "",
                 "face_uid": account_values[2], 
                 "face_pass": account_values[3],
                 "cookie": account_values[5],
@@ -258,53 +345,58 @@ class Ui_MainWindow(object):
                 "proxy": "",
                 "user_agent": "",
                 "status": "",
-                "action": ""
+                "action": "",
                 }
             self.accounts.append(account_obj)
         return self.accounts
     
     
     def add_proxies_from_file(self):
-    
-        if self.tableWidget.rowCount() == 0:
-            print("You must add accounts first")
-        else:
-            # Open file Dialog
-            file_name, _ = QFileDialog.getOpenFileName(None, "Open File", "", "All Files (*);;Text Files (*.txt)")
-                
-            # Read file and import to data table
-            if file_name:
-                self.label.setText(str(file_name))
-
-                file = QFile(file_name)
-
-                if file.open(QFile.ReadOnly | QFile.Text):
-                    stream = QTextStream(file)
-                    proxies_content = stream.readAll()
-                    # remove first and last space
-                    proxies_content = proxies_content.strip()
-
-                    proxies_lines = proxies_content.split('\n')
-
-                    # Add proxies to accounts
+        try:
+            if self.tableWidget.rowCount() == 0:
+                print("You must add accounts first")
+            else:
+                # Open file Dialog
+                file_name, _ = QFileDialog.getOpenFileName(None, "Open File", "", "All Files (*);;Text Files (*.txt)")
                     
-                    count = 0
-                    for account in self.accounts:
-                        if count > len(proxies_lines) - 1:
-                            # reset count to 0
-                            count = 0
+                # Read file and import to data table
+                if file_name:
+                    self.label.setText(str(file_name))
 
-                        account["proxy"] = proxies_lines[count]
+                    file = QFile(file_name)
+
+                    if file.open(QFile.ReadOnly | QFile.Text):
+                        stream = QTextStream(file)
+                        proxies_content = stream.readAll()
+                        # remove first and last space
+                        proxies_content = proxies_content.strip()
+
+                        proxies_lines = proxies_content.split('\n')
+
+                        # Add proxies to accounts
                         
-                        # increase count
-                        count += 1
+                        count = 0
+                        for account in self.accounts:
+                            if count > len(proxies_lines) - 1:
+                                # reset count to 0
+                                count = 0
 
-                        
-                    self.add_accounts_to_table(self.accounts)             
+                            account["proxy"] = proxies_lines[count]
+                            
+                            # increase count
+                            count += 1
 
-                    file.close()
-                else:
-                    print(f"Error opening file: {file.errorString()}")
+                            
+                        self.add_accounts_to_table(self.accounts)             
+
+                        file.close()
+
+                        print("Add proxies to accounts successfully!")
+                    else:
+                        print(f"Error opening file: {file.errorString()}")
+        except Exception as error:
+            print(error)
+        
 
     
 if __name__ == "__main__":
