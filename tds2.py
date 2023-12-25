@@ -12,6 +12,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QPushButton
 from PyQt5.QtCore import QFile, QTextStream
 import requests
+from facebook import login, open_new_tab_and_interact, quit_driver, clear_browser
 
 
 class Ui_MainWindow(object):
@@ -211,13 +212,12 @@ class Ui_MainWindow(object):
         # Make the request with the cookies
         response = requests.get("https://traodoisub.com/view/setting/load.php", cookies=cookies)
 
-        print('response', response.json())
-
         response = response.json()
 
         tds_token, tds_coins = response["tokentds"], response["xu"]
 
         return tds_token, tds_coins
+    
     
     def __tds_configure_facebook(self, facebook_id="", tds_token="", proxy_string = None):
         # response = requests.get(f'https://traodoisub.com/api/?fields=run&id={facebook_id}&access_token={tds_token}')
@@ -239,13 +239,104 @@ class Ui_MainWindow(object):
             # Make a request using the proxy
             response = requests.get(target_url, proxies=proxies)
         else:
-            # Make a request without using the proxy
+            # Make a request without the proxy
             response = requests.get(target_url)
 
         print("__tds_configure_facebook - response: ", response.json())
 
+    # GET jobs with access token
+    def __tds_get_facebook_jobs(self, tds_token="", proxy_string=None):
+
+        target_url = f"{self.base_url}/api/?fields=like&access_token={tds_token}"
+        
+
+        if proxy_string:
+            # Parse the proxy components
+            ip, port, username, password = proxy_string.split(":")
+            proxy_url = f"http://{username}:{password}@{ip}:{port}"
+
+            proxies = {
+                "http": proxy_url,
+                "https": proxy_url,
+            }
+
+            # Make a request using the proxy
+            response = requests.get(target_url, proxies=proxies)
+        else:
+            response = requests.get(target_url)
+
+        jobs = response.json()
+
+        print('-------------------------------------')
+        print('Jobs list:', jobs)
+        print('-------------------------------------')
+
+        if isinstance(jobs, dict):
+            return []
+
+        return jobs
+
+
+    def __tds_get_job_coins(self, job_id="", tds_token="", proxy_string=None, cookie=""):
+        target_url = f"{self.base_url}/ex/like/nhantien.php"
+
+        cookie_string = cookie.strip(";")
+
+        # Split the cookie string into key and value
+        cookie_key, cookie_value = cookie_string.split('=')
+
+        # Create a dictionary with the cookie
+        cookies = {cookie_key: cookie_value}
+        
+
+        form_data = {
+            'id': job_id,
+            'type': "like",
+        }
+
+        if proxy_string:
+            # Parse the proxy components
+            ip, port, username, password = proxy_string.split(":")
+            proxy_url = f"http://{username}:{password}@{ip}:{port}"
+
+            proxies = {
+                "http": proxy_url,
+                "https": proxy_url,
+            }
+
+            # Make a request using the proxy
+            response = requests.post(target_url, proxies=proxies, cookies=cookies, data=form_data)
+        else:
+            response = requests.post(target_url, cookies=cookies, data=form_data)
+        try:
+            print('Get coins response: ', response.text)
+        except:
+            pass
+
+    def __tds_auto_like_posts(self, jobs = [], cookie=""):
+        base_url = "https://www.facebook.com"
+
+        # jobs = [{'id': '100005530068181_2291432671051046'}, {'id': '100070511743424_402580498769005'}, {'id': '100091316545864_281386974915185'}, {'id': '100029138540920_1147772919537315'}]
+
+        if len(jobs) > 0:
+            for i, job in enumerate(jobs):
+                open_new_tab_and_interact(url=f'{base_url}/{job["id"]}', like=True, comment=False, tab_order=(i+1), delay=2)
+                self.__tds_get_job_coins(job_id=job["id"], cookie=cookie)
+
+        clear_browser()
+
     def on_run_button_clicked(self, row, col):
         # print(f"Button clicked at Row: {row}, Column: {col}")
+
+        # Designate the facebook worker
+        facebook_worker = {
+            "uid": self.accounts[row]["face_uid"],
+            "password": self.accounts[row]["face_pass"],
+            "fa_secret": self.accounts[row]["face_secret"],
+        }
+
+        # login facebook using selenium
+        login(account_credentials=facebook_worker)
 
         username = self.accounts[row]["tds_username"]
         password = self.accounts[row]["tds_pass"]
@@ -253,7 +344,8 @@ class Ui_MainWindow(object):
 
         print(f"Getting cookie for the account with username: '{username}' and password: '{password}'")
 
-        tds_cookie = self.__tds_get_cookie(username=username, password=password, proxy_string=proxy_string)
+        tds_cookie = self.__tds_get_cookie(username=username, password=password)
+        print('tds_cookie', tds_cookie)
 
         self.accounts[row]["tds_cookie"] = tds_cookie
         
@@ -266,7 +358,19 @@ class Ui_MainWindow(object):
         self.add_accounts_to_table(self.accounts)
 
         # add a facebook to the tds account
-        self.__tds_configure_facebook(facebook_id="100010822392588", tds_token=tds_token)
+        # self.__tds_configure_facebook(facebook_id="61552920328465", tds_token=tds_token)
+
+        # Get facebook jobs
+        jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
+
+        # Run selenium to like post and get money
+        self.__tds_auto_like_posts(jobs=jobs, cookie=tds_cookie)
+
+
+        # self.__tds_get_facebook_jobs_with_cookie(cookie=tds_cookie)
+
+        # Get job coins
+        # self.__tds_get_job_coins(job_id="100089826507183_320287930975421", tds_token=tds_token)
 
     def add_row(self, row_index, data, column_order):
         _translate = QtCore.QCoreApplication.translate
@@ -340,6 +444,7 @@ class Ui_MainWindow(object):
                 "tds_coins": "",
                 "face_uid": account_values[2], 
                 "face_pass": account_values[3],
+                "face_secret": account_values[4],
                 "cookie": account_values[5],
                 "token": "",
                 "proxy": "",
@@ -391,7 +496,7 @@ class Ui_MainWindow(object):
 
                         file.close()
 
-                        print("Add proxies to accounts successfully!")
+                        print("Added proxies to accounts successfully!")
                     else:
                         print(f"Error opening file: {file.errorString()}")
         except Exception as error:
