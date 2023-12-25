@@ -171,6 +171,9 @@ def clear_browser():
         driver.switch_to.window(handle)
         driver.close()
 
+    # Switch to the parent tab
+    driver.switch_to.window(driver.window_handles[0])
+    driver.refresh()
 
 def get_2FA_Code(fa_secret: str):
     # URL with with the query param fa_scret
