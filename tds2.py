@@ -11,15 +11,27 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QPushButton
 from PyQt5.QtCore import QFile, QTextStream
+from PyQt5 import QtCore
+import threading
 import requests
-from facebook import login, open_new_tab_and_interact, quit_driver, clear_browser
+from facebook import SeleniumWorker
+import time
 
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
+
+
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(1200, 605)
+
+        # Size of the main window
+        MainWindow.resize(1486, 605)
+
+
         self.centralwidget = QtWidgets.QWidget(MainWindow)
+
+
+
         self.centralwidget.setObjectName("centralwidget")
         self.frame = QtWidgets.QFrame(self.centralwidget)
         self.frame.setGeometry(QtCore.QRect(30, 10, 741, 80))
@@ -51,7 +63,11 @@ class Ui_MainWindow(object):
         self.addProxyButton.setFont(font)
         self.addProxyButton.setObjectName("addProxyButton")
         self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
-        self.tableWidget.setGeometry(QtCore.QRect(30, 130, 1150, 411))
+
+        # 3rd and 4th parameters use to set width and height of the Table Widget
+        self.tableWidget.setGeometry(QtCore.QRect(30, 130, 1439, 411))
+
+
         self.tableWidget.setObjectName("tableWidget")
 
         self.tableWidget.setColumnCount(11)
@@ -84,6 +100,9 @@ class Ui_MainWindow(object):
         self.tableWidget.setHorizontalHeaderItem(9, item)
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setHorizontalHeaderItem(10, item)
+
+        # Set specified width for column "status"
+        self.tableWidget.setColumnWidth(9, 414)
 
 
         item = QtWidgets.QTableWidgetItem()
@@ -128,9 +147,18 @@ class Ui_MainWindow(object):
         # new
         self.addAccountButton.clicked.connect(self.add_accounts_from_file)
         self.addProxyButton.clicked.connect(self.add_proxies_from_file)
+        
+        self.column_order = ["tds_username", "tds_pass", "face_uid", "face_pass", "cookie", "token", "proxy", "user_agent", "tds_coins",  "status",  "action"]
 
         self.accounts = []
         self.base_url = "https://traodoisub.com"
+
+
+        # New
+        self._worker = SeleniumWorker()
+        thread = QtCore.QThread(self.centralwidget)
+        thread.start()
+        self._worker.moveToThread(thread)
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -313,58 +341,79 @@ class Ui_MainWindow(object):
         except:
             pass
 
-    def __tds_auto_like_posts(self, jobs = [], cookie=""):
+    # threading.Thread(target=self._worker.open_new_tab_and_interact, 
+    #                              kwargs={'url': f'{base_url}/{job["id"]}', 'like': True, 'comment': False, 'tab_order': (i+1), 'delay': 10}
+    #                              , daemon=True).start()
+
+    def __tds_auto_like_posts(self, jobs = [], row=None, cookie=""):
         base_url = "https://www.facebook.com"
 
         # jobs = [{'id': '100005530068181_2291432671051046'}, {'id': '100070511743424_402580498769005'}, {'id': '100091316545864_281386974915185'}, {'id': '100029138540920_1147772919537315'}]
 
         if len(jobs) > 0:
             for i, job in enumerate(jobs):
-                open_new_tab_and_interact(url=f'{base_url}/{job["id"]}', like=True, comment=False, tab_order=(i+1), delay=2)
+                threading.Thread(target=self._worker.open_new_tab_and_interact)
+                self._worker.open_new_tab_and_interact(url=f'{base_url}/{job["id"]}', like=True, comment=False, tab_order=(i+1), delay=10)
                 self.__tds_get_job_coins(job_id=job["id"], cookie=cookie)
 
-        clear_browser()
+        self._worker.clear_browser()
+
+        __, tds_coins = self.__tds_get_token(cookie=cookie)
+
+        self.changeCellValue(row, self.column_order.index('tds_coins'), newValue=tds_coins)
+
+
 
     def on_run_button_clicked(self, row, col):
-        # print(f"Button clicked at Row: {row}, Column: {col}")
-
-        # Designate the facebook worker
+        
+        # Connect the signal from the worker to the updateTable slot
+        # selenium_worker.selenium_finished.connect(self.updateTable)
+        
+        # # Designate the facebook worker
         facebook_worker = {
             "uid": self.accounts[row]["face_uid"],
             "password": self.accounts[row]["face_pass"],
             "fa_secret": self.accounts[row]["face_secret"],
         }
 
-        # login facebook using selenium
-        login(account_credentials=facebook_worker)
 
-        username = self.accounts[row]["tds_username"]
-        password = self.accounts[row]["tds_pass"]
-        proxy_string = self.accounts[row]["proxy"]
+        # Switch to a new thread for selenium login
+        threading.Thread(target=self._worker.login, kwargs={'account_credentials': facebook_worker}, daemon=True).start()
+        # threading.Thread(target=self._worker.doWork, daemon=True).start()
 
-        print(f"Getting cookie for the account with username: '{username}' and password: '{password}'")
+        self.changeCellValue(row, self.column_order.index('status'), newValue='Đang đăng nhập...')
 
-        tds_cookie = self.__tds_get_cookie(username=username, password=password)
-        print('tds_cookie', tds_cookie)
 
-        self.accounts[row]["tds_cookie"] = tds_cookie
+        # username = self.accounts[row]["tds_username"]
+        # password = self.accounts[row]["tds_pass"]
+        # proxy_string = self.accounts[row]["proxy"]
+
+        # print(f"Getting cookie for the account with username: '{username}' and password: '{password}'")
+
+        # tds_cookie = self.__tds_get_cookie(username=username, password=password)
+        # print('tds_cookie', tds_cookie)
+
+        # self.accounts[row]["tds_cookie"] = tds_cookie
         
-        tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
+        # tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
 
-        self.accounts[row]["tds_token"] = tds_token
-        self.accounts[row]["tds_coins"] = tds_coins
+        # self.accounts[row]["tds_token"] = tds_token
+        # self.accounts[row]["tds_coins"] = tds_coins
 
         # update table with coins
-        self.add_accounts_to_table(self.accounts)
+        # self.add_accounts_to_table(self.accounts)
 
         # add a facebook to the tds account
         # self.__tds_configure_facebook(facebook_id="61552920328465", tds_token=tds_token)
 
-        # Get facebook jobs
-        jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
+        # # Get facebook jobs
+        # jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
 
         # Run selenium to like post and get money
-        self.__tds_auto_like_posts(jobs=jobs, cookie=tds_cookie)
+        # threading.Thread(target = self.__tds_auto_like_posts, kwargs={'jobs': jobs, 'row': row, 'cookie': tds_cookie}, daemon=True).start()
+        # self.__tds_auto_like_posts(jobs=jobs, row=row,cookie=tds_cookie)
+
+        
 
 
         # self.__tds_get_facebook_jobs_with_cookie(cookie=tds_cookie)
@@ -372,9 +421,18 @@ class Ui_MainWindow(object):
         # Get job coins
         # self.__tds_get_job_coins(job_id="100089826507183_320287930975421", tds_token=tds_token)
 
-    def add_row(self, row_index, data, column_order):
+    
+    def changeCellValue(self, row, col, newValue):
+        # Create a new item with the desired value
+        new_item = QtWidgets.QTableWidgetItem(newValue)
+
+        # Set the new item for the specified cell
+        self.tableWidget.setItem(row, col, new_item)
+
+
+    def add_row(self, row_index, data):
         _translate = QtCore.QCoreApplication.translate
-        for column_index, key in enumerate(column_order):
+        for column_index, key in enumerate(self.column_order):
             value = data.get(key, "")
 
             if key == "action":
@@ -392,10 +450,10 @@ class Ui_MainWindow(object):
             __sortingEnabled = self.tableWidget.isSortingEnabled()
 
             # Positions of field columns in the data table
-            column_order = ["tds_username", "tds_pass", "face_uid", "face_pass", "cookie", "token", "proxy", "user_agent", "tds_coins",  "status",  "action"]
+            # column_order = ["tds_username", "tds_pass", "face_uid", "face_pass", "cookie", "token", "proxy", "user_agent", "tds_coins",  "status",  "action"]
 
             for row_index, account_data in enumerate(accounts):
-                self.add_row(row_index, account_data, column_order)
+                self.add_row(row_index, account_data)
             self.tableWidget.setSortingEnabled(__sortingEnabled)
 
             print('Added accounts successfully!')
