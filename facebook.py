@@ -11,6 +11,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 import time
 from proxy_chrome_driver import get_chromedriver
 from auto_action import auto_like, auto_haha, auto_play_video, auto_comment_on_livetream, auto_follow_on_livestream
+import traceback
 
 from traodoisub import Traodoisub
 
@@ -18,6 +19,8 @@ class WorkerSignals(QObject):
     finished = pyqtSignal()
     error = pyqtSignal(tuple)
     result = pyqtSignal(object)
+
+    coins = pyqtSignal(object)
 
 class SeleniumWorker(QRunnable):
     
@@ -27,19 +30,20 @@ class SeleniumWorker(QRunnable):
 
     
 
-    def __init__(self, login_credential: dict, action: dict, tds_cookie=""):
+    def __init__(self, facebook_login_credential: dict, tds_login_credential: dict, action: dict):
         super(SeleniumWorker, self).__init__()
 
         # new
-        self.login_credential = login_credential
+        self.facebook_login_credential = facebook_login_credential
+
+        # new
+        self.tds_login_credential = tds_login_credential
 
         self.action = action
 
         self.signals = WorkerSignals()
 
         self.traodoisub = Traodoisub()
-
-        self.tds_cookie = tds_cookie
 
         self.driver = get_chromedriver(use_proxy=False, user_agent=None, host=None, port=None, username=None, password=None)
 
@@ -50,42 +54,55 @@ class SeleniumWorker(QRunnable):
             # Initialize Selenium WebDriver (you may need to adjust the path to your WebDriver)
             # driver = webdriver.Chrome()
 
-            # Perform some simple action (e.g., searching on Google)
-
-            
-
+            # Perform some simple action (e.g., login facebook, get tds_cookie, etc...)
             self.login()
 
             # Simulate a delay (e.g., to simulate a time-consuming task)
             time.sleep(2)
 
-            target_url = "https://www.facebook.com"
+            # _______________GET TDS COOKIE________________
+            tds_cookie = self.traodoisub.get_cookie(username=self.tds_login_credential['username'], 
+                                                    password=self.tds_login_credential['password'])
+            
+            self.signals.result.emit(f'tds_cookie: {tds_cookie}')
+            
+            # ________________GET TDS TOKEN_________________
+            tds_token, tds_coins = self.traodoisub.get_token(cookie=tds_cookie)
+            # update table with coins
+            self.signals.coins.emit(tds_coins)
 
-            if self.action['type'] == 'like' and len(self.action['jobs']) > 0:
-                self.signals.result.emit('Executing jobs from TRAODOISUB...')
-                jobs = self.action['jobs']
 
-                for i, job in enumerate(jobs):
-                    self.open_new_tab_and_interact(url=f'{target_url}/{job["id"]}', like=True, tab_order=(i+1), delay=10)
-                    job_id, response_msg = self.traodoisub.get_job_coins(job_id=job["id"], tds_cookie=self.tds_cookie)
-                    msg = f"Job ID: {job_id} - {response_msg}"
-                    self.signals.result.emit(msg)
+            # time.sleep(1000)
+
+
+            # target_url = "https://www.facebook.com"
+
+            # if self.action['type'] == 'like' and len(self.action['jobs']) > 0:
+            #     self.signals.result.emit('Executing jobs from TRAODOISUB...')
+            #     jobs = self.action['jobs']
+
+            #     for i, job in enumerate(jobs):
+            #         self.open_new_tab_and_interact(url=f'{target_url}/{job["id"]}', like=True, tab_order=(i+1), delay=10)
+            #         job_id, response_msg = self.traodoisub.get_job_coins(job_id=job["id"], tds_cookie=self.tds_cookie)
+            #         msg = f"Job ID: {job_id} - {response_msg}"
+            #         self.signals.result.emit(msg)
 
             
 
             # Emit the result signal
             # self.signals.result.emit(f"Task completed for {self.url}")
 
-        except Exception as error:
+        except Exception as e:
             # Emit the error signal if an exception occurs
-            self.signals.error.emit(error)
+            tb_info = traceback.format_exc()
+            self.signals.error.emit((type(e), e.args, tb_info))
 
-        finally:
+        # finally:
             # Close the WebDriver
             # driver.quit()
 
             # Emit the finished signal
-            self.signals.finished.emit()
+            # self.signals.finished.emit()
 
 
     def login(self):
@@ -103,8 +120,8 @@ class SeleniumWorker(QRunnable):
 
 
             # Enter your Facebook credentials
-            username_input.send_keys(self.login_credential["uid"])
-            password_input.send_keys(self.login_credential["password"])
+            username_input.send_keys(self.facebook_login_credential["uid"])
+            password_input.send_keys(self.facebook_login_credential["password"])
 
             # Click the login button
             login_button.click()
@@ -114,7 +131,7 @@ class SeleniumWorker(QRunnable):
             checkPointSubmitbutton = self.driver.find_element(By.ID, "checkpointSubmitButton")
 
             # GET 2FA Code
-            two_fa_code = self.get_2FA_Code(self.login_credential["fa_secret"])
+            two_fa_code = self.get_2FA_Code(self.facebook_login_credential["fa_secret"])
 
             # Enter 2FA Code
             appovals_code_input.send_keys(two_fa_code)

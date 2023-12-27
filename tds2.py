@@ -16,6 +16,7 @@ import threading
 import requests
 from facebook import SeleniumWorker
 import time
+from traodoisub import Traodoisub
 
 
 class Ui_MainWindow(object):
@@ -157,6 +158,9 @@ class Ui_MainWindow(object):
         # New
         self.threadpool = QThreadPool()
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
+
+        # NEW
+        self.traodoisub = Traodoisub()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -364,24 +368,20 @@ class Ui_MainWindow(object):
 
     def on_run_button_clicked(self, row, col):
         # _______________GET TDS COOKIE________________
+        # username = self.accounts[row]["tds_username"]
+        # password = self.accounts[row]["tds_pass"]
+        # proxy_string = self.accounts[row]["proxy"]
+        # tds_cookie = self.__tds_get_cookie(username=username, password=password)
+        # print('tds_cookie', tds_cookie)
+        # self.accounts[row]["tds_cookie"] = tds_cookie
 
-        username = self.accounts[row]["tds_username"]
-        password = self.accounts[row]["tds_pass"]
-        proxy_string = self.accounts[row]["proxy"]
-
-        tds_cookie = self.__tds_get_cookie(username=username, password=password)
-        print('tds_cookie', tds_cookie)
-
-        self.accounts[row]["tds_cookie"] = tds_cookie
 
         # ________________GET TDS TOKEN_________________
-        tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
-
-        self.accounts[row]["tds_token"] = tds_token
-        self.accounts[row]["tds_coins"] = tds_coins
-
-        # update table with coins
-        self.add_accounts_to_table(self.accounts)
+        # tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
+        # self.accounts[row]["tds_token"] = tds_token
+        # self.accounts[row]["tds_coins"] = tds_coins
+        # # update table with coins
+        # self.add_accounts_to_table(self.accounts)
 
 
         # add a facebook to the tds account
@@ -390,23 +390,31 @@ class Ui_MainWindow(object):
 
 
         # _______________GET FACEBOOK JOBS_______________
-        jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
+        # jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
 
 
         
 
         # _______________USE SELENIUM-FACEBOOK-WORKER_________________
-        login_credential = {
+        facebook_login_credential = {
             "uid": self.accounts[row]["face_uid"],
             "password": self.accounts[row]["face_pass"],
             "fa_secret": self.accounts[row]["face_secret"],
         }
-        
-        action = {'type': 'like', 'jobs': jobs}
 
-        facebook_worker = SeleniumWorker(login_credential=login_credential, action=action, tds_cookie=tds_cookie)
+        tds_login_credential = {
+            'username': self.accounts[row]['tds_username'],
+            'password': self.accounts[row]['tds_pass']
+        }
+        
+        action = {'type': 'like', 'jobs': []}
+
+        facebook_worker = SeleniumWorker(facebook_login_credential=facebook_login_credential,
+                                         tds_login_credential=tds_login_credential,
+                                         action=action)
         facebook_worker.signals.result.connect(lambda result: self.display_result(result, row))
-        facebook_worker.signals.result.connect(lambda error: self.display_result(error, row))
+        facebook_worker.signals.error.connect(lambda error: self.display_error(error, row))
+        facebook_worker.signals.coins.connect(lambda coins: self.display_coins(coins, row))
         # Execute the worker in the thread pool
         self.threadpool.start(facebook_worker)
 
@@ -429,12 +437,16 @@ class Ui_MainWindow(object):
 
     
     def display_result(self, result, row):
-        print(result)
+        print('result:', result)
         self.changeCellValue(row, self.column_order.index('status'), newValue=str(result))
 
     def display_error(self, error, row):
-        print(error)
-        self.changeCellValue(row, self.column_order.index('status'), newValue=str(error))
+        print('error:', error)
+        self.changeCellValue(row, self.column_order.index('status'), newValue=f'{error}')
+
+    def display_coins(self, coins, row):
+        print('coins:', coins)
+        self.changeCellValue(row, self.column_order.index('tds_coins'), newValue=str(coins))
 
     def changeCellValue(self, row, col, newValue):
         # Create a new item with the desired value
