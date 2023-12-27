@@ -5,84 +5,141 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.proxy import Proxy, ProxyType
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
+from PyQt5.QtCore import Qt, QRunnable, QObject, pyqtSlot, pyqtSignal, QThreadPool
 import requests
 from PyQt5.QtCore import QObject, pyqtSignal
 import time
 from proxy_chrome_driver import get_chromedriver
 from auto_action import auto_like, auto_haha, auto_play_video, auto_comment_on_livetream, auto_follow_on_livestream
-import threading
+
+from traodoisub import Traodoisub
+
+class WorkerSignals(QObject):
+    finished = pyqtSignal()
+    error = pyqtSignal(tuple)
+    result = pyqtSignal(object)
+
+class SeleniumWorker(QRunnable):
+    
+    # driver = get_chromedriver(use_proxy=False, user_agent=None, host=None, port=None, username=None, password=None)
+
+    # actions list will be like this: {'type': 'like', 'jobs': ['url_1', 'url_2', ...]}
+
+    
+
+    def __init__(self, login_credential: dict, action: dict, tds_cookie=""):
+        super(SeleniumWorker, self).__init__()
+
+        # new
+        self.login_credential = login_credential
+
+        self.action = action
+
+        self.signals = WorkerSignals()
+
+        self.traodoisub = Traodoisub()
+
+        self.tds_cookie = tds_cookie
+
+        self.driver = get_chromedriver(use_proxy=False, user_agent=None, host=None, port=None, username=None, password=None)
 
 
-class SeleniumWorker(QObject):
-    # def __init__(self):
+    @pyqtSlot()
+    def run(self):
+        try:
+            # Initialize Selenium WebDriver (you may need to adjust the path to your WebDriver)
+            # driver = webdriver.Chrome()
 
-    #     self.driver = webdriver.Chrome()
+            # Perform some simple action (e.g., searching on Google)
 
-    #     self.progressLogin = pyqtSignal(str)
+            
 
-    driver = webdriver.Chrome()
+            self.login()
 
-    progressLogin = pyqtSignal(str)
-    job_msg = pyqtSignal(str)  # message to be shown to user
+            # Simulate a delay (e.g., to simulate a time-consuming task)
+            time.sleep(2)
 
-    def doWork(self):
-        driver_test = webdriver.Chrome()
-        for i in range(10):
-            driver_test.get(f'https://www.facebook.com/{i}')
+            target_url = "https://www.facebook.com"
+
+            if self.action['type'] == 'like' and len(self.action['jobs']) > 0:
+                self.signals.result.emit('Executing jobs from TRAODOISUB...')
+                jobs = self.action['jobs']
+
+                for i, job in enumerate(jobs):
+                    self.open_new_tab_and_interact(url=f'{target_url}/{job["id"]}', like=True, tab_order=(i+1), delay=10)
+                    job_id, response_msg = self.traodoisub.get_job_coins(job_id=job["id"], tds_cookie=self.tds_cookie)
+                    msg = f"Job ID: {job_id} - {response_msg}"
+                    self.signals.result.emit(msg)
+
+            
+
+            # Emit the result signal
+            # self.signals.result.emit(f"Task completed for {self.url}")
+
+        except Exception as error:
+            # Emit the error signal if an exception occurs
+            self.signals.error.emit(error)
+
+        finally:
+            # Close the WebDriver
+            # driver.quit()
+
+            # Emit the finished signal
+            self.signals.finished.emit()
+
+
+    def login(self):
+        try:
+            self.signals.result.emit('Signing in facebook...')
+            # Navigate to the Facebook login page
+            self.driver.get("https://www.facebook.com")
+
             time.sleep(5)
 
-    def login(self, account_credentials = {}):
-        
-        # Navigate to the Facebook login page
-        self.driver.get("https://www.facebook.com")
-
-        time.sleep(30)
-
-        # Find the username and password input fields and the login button using their respective attributes
-        username_input = self.driver.find_element(By.ID, "email")
-        password_input = self.driver.find_element(By.ID, "pass")
-        login_button = self.driver.find_element(By.NAME, "login")
+            # Find the username and password input fields and the login button using their respective attributes
+            username_input = self.driver.find_element(By.ID, "email")
+            password_input = self.driver.find_element(By.ID, "pass")
+            login_button = self.driver.find_element(By.NAME, "login")
 
 
-        # Enter your Facebook credentials
-        username_input.send_keys(account_credentials["uid"])
-        password_input.send_keys(account_credentials["password"])
+            # Enter your Facebook credentials
+            username_input.send_keys(self.login_credential["uid"])
+            password_input.send_keys(self.login_credential["password"])
 
-        # Click the login button
-        login_button.click()
+            # Click the login button
+            login_button.click()
 
-        # Find the appovals_code field and checkPointSubmitbutton after click
-        appovals_code_input = self.driver.find_element(By.ID, "approvals_code")
-        checkPointSubmitbutton = self.driver.find_element(By.ID, "checkpointSubmitButton")
+            # Find the appovals_code field and checkPointSubmitbutton after click
+            appovals_code_input = self.driver.find_element(By.ID, "approvals_code")
+            checkPointSubmitbutton = self.driver.find_element(By.ID, "checkpointSubmitButton")
 
-        # GET 2FA Code
-        two_fa_code = self.get_2FA_Code(account_credentials["fa_secret"])
+            # GET 2FA Code
+            two_fa_code = self.get_2FA_Code(self.login_credential["fa_secret"])
 
-        # Enter 2FA Code
-        appovals_code_input.send_keys(two_fa_code)
+            # Enter 2FA Code
+            appovals_code_input.send_keys(two_fa_code)
 
-        # Click the CPS_button
-        checkPointSubmitbutton.click()
+            # Click the CPS_button
+            checkPointSubmitbutton.click()
 
-        # Find checkbox
-        try:
+            # Find checkbox
             checkBox = self.driver.find_element(By.XPATH, "//div[@class='uiInputLabel clearfix uiInputLabelLegacy']/label")
             # click check box
             checkBox.click()
-        except Exception as error:
-            print(error)
 
-        # find and click another CPS_Button
-        try:
+
+
+            # find and click another CPS_Button
             checkPointSubmitbutton = self.driver.find_element(By.ID, "checkpointSubmitButton")
             checkPointSubmitbutton.click()
+
+            time.sleep(2)
+        
         except Exception as error:
-            print(error)
+            self.signals.result.emit(error)
 
-        # new
-        self.progressLogin.emit('Đăng nhập thành công!')
-
-        time.sleep(2)
+        
+        self.signals.result.emit('Signed in facebook successfully!')
 
 
         
@@ -244,7 +301,7 @@ class SeleniumWorker(QObject):
             time.sleep(delay)
 
         except Exception as error:
-            print(error)
+            self.signals.error.emit(error)
 
     def watch_livestream_and_interact(self, url='', like=False, comment=False, delay=2):
         time.sleep(delay)

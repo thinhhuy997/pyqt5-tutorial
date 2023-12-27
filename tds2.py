@@ -10,7 +10,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QFileDialog, QPushButton
-from PyQt5.QtCore import QFile, QTextStream
+from PyQt5.QtCore import QFile, QTextStream, QThreadPool
 from PyQt5 import QtCore
 import threading
 import requests
@@ -20,8 +20,6 @@ import time
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
-
-
         MainWindow.setObjectName("MainWindow")
 
         # Size of the main window
@@ -104,6 +102,8 @@ class Ui_MainWindow(object):
         # Set specified width for column "status"
         self.tableWidget.setColumnWidth(9, 414)
 
+        self.tableWidget.verticalHeader().setDefaultSectionSize(50)
+
 
         item = QtWidgets.QTableWidgetItem()
         self.tableWidget.setItem(0, 0, item)
@@ -155,10 +155,8 @@ class Ui_MainWindow(object):
 
 
         # New
-        self._worker = SeleniumWorker()
-        thread = QtCore.QThread(self.centralwidget)
-        thread.start()
-        self._worker.moveToThread(thread)
+        self.threadpool = QThreadPool()
+        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -365,63 +363,79 @@ class Ui_MainWindow(object):
 
 
     def on_run_button_clicked(self, row, col):
-        
-        # Connect the signal from the worker to the updateTable slot
-        # selenium_worker.selenium_finished.connect(self.updateTable)
-        
-        # # Designate the facebook worker
-        facebook_worker = {
-            "uid": self.accounts[row]["face_uid"],
-            "password": self.accounts[row]["face_pass"],
-            "fa_secret": self.accounts[row]["face_secret"],
-        }
+        # _______________GET TDS COOKIE________________
 
+        username = self.accounts[row]["tds_username"]
+        password = self.accounts[row]["tds_pass"]
+        proxy_string = self.accounts[row]["proxy"]
 
-        # Switch to a new thread for selenium login
-        threading.Thread(target=self._worker.login, kwargs={'account_credentials': facebook_worker}, daemon=True).start()
-        # threading.Thread(target=self._worker.doWork, daemon=True).start()
+        tds_cookie = self.__tds_get_cookie(username=username, password=password)
+        print('tds_cookie', tds_cookie)
 
-        self.changeCellValue(row, self.column_order.index('status'), newValue='Đang đăng nhập...')
+        self.accounts[row]["tds_cookie"] = tds_cookie
 
+        # ________________GET TDS TOKEN_________________
+        tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
 
-        # username = self.accounts[row]["tds_username"]
-        # password = self.accounts[row]["tds_pass"]
-        # proxy_string = self.accounts[row]["proxy"]
-
-        # print(f"Getting cookie for the account with username: '{username}' and password: '{password}'")
-
-        # tds_cookie = self.__tds_get_cookie(username=username, password=password)
-        # print('tds_cookie', tds_cookie)
-
-        # self.accounts[row]["tds_cookie"] = tds_cookie
-        
-        # tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
-
-        # self.accounts[row]["tds_token"] = tds_token
-        # self.accounts[row]["tds_coins"] = tds_coins
+        self.accounts[row]["tds_token"] = tds_token
+        self.accounts[row]["tds_coins"] = tds_coins
 
         # update table with coins
-        # self.add_accounts_to_table(self.accounts)
+        self.add_accounts_to_table(self.accounts)
+
 
         # add a facebook to the tds account
         # self.__tds_configure_facebook(facebook_id="61552920328465", tds_token=tds_token)
 
-        # # Get facebook jobs
-        # jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
+
+
+        # _______________GET FACEBOOK JOBS_______________
+        jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
+
+
+        
+
+        # _______________USE SELENIUM-FACEBOOK-WORKER_________________
+        login_credential = {
+            "uid": self.accounts[row]["face_uid"],
+            "password": self.accounts[row]["face_pass"],
+            "fa_secret": self.accounts[row]["face_secret"],
+        }
+        
+        action = {'type': 'like', 'jobs': jobs}
+
+        facebook_worker = SeleniumWorker(login_credential=login_credential, action=action, tds_cookie=tds_cookie)
+        facebook_worker.signals.result.connect(lambda result: self.display_result(result, row))
+        facebook_worker.signals.result.connect(lambda error: self.display_result(error, row))
+        # Execute the worker in the thread pool
+        self.threadpool.start(facebook_worker)
+
+
+
 
         # Run selenium to like post and get money
-        # threading.Thread(target = self.__tds_auto_like_posts, kwargs={'jobs': jobs, 'row': row, 'cookie': tds_cookie}, daemon=True).start()
+        # my_thread.join()
+        # my_thread = threading.Thread(target = self.__tds_auto_like_posts, kwargs={'jobs': jobs, 'row': row, 'cookie': tds_cookie}, daemon=True)
+        # my_thread.start()
         # self.__tds_auto_like_posts(jobs=jobs, row=row,cookie=tds_cookie)
 
         
 
 
-        # self.__tds_get_facebook_jobs_with_cookie(cookie=tds_cookie)
 
-        # Get job coins
-        # self.__tds_get_job_coins(job_id="100089826507183_320287930975421", tds_token=tds_token)
+
+
+        
 
     
+    def display_result(self, result, row):
+        print(result)
+        self.changeCellValue(row, self.column_order.index('status'), newValue=str(result))
+
+    def display_error(self, error, row):
+        print(error)
+        self.changeCellValue(row, self.column_order.index('status'), newValue=str(error))
+
     def changeCellValue(self, row, col, newValue):
         # Create a new item with the desired value
         new_item = QtWidgets.QTableWidgetItem(newValue)
