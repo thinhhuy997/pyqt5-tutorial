@@ -9,9 +9,10 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMainWindow, QFileDialog, QPushButton
+from PyQt5.QtWidgets import QMainWindow, QFileDialog, QPushButton, QMenu, QAction
 from PyQt5.QtCore import QFile, QTextStream, QThreadPool
 from PyQt5 import QtCore
+from PyQt5.QtCore import Qt
 import threading
 import requests
 from facebook import SeleniumWorker
@@ -43,6 +44,7 @@ class Ui_MainWindow(object):
         self.frame.setFrameShape(QtWidgets.QFrame.StyledPanel)
         self.frame.setFrameShadow(QtWidgets.QFrame.Raised)
         self.frame.setObjectName("frame")
+        
         self.addAccountButton = QtWidgets.QPushButton(self.frame)
         self.addAccountButton.setGeometry(QtCore.QRect(20, 20, 101, 31))
         font = QtGui.QFont()
@@ -52,6 +54,7 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.addAccountButton.setFont(font)
         self.addAccountButton.setObjectName("addAccountButton")
+
         self.addProxyButton = QtWidgets.QPushButton(self.frame)
         self.addProxyButton.setGeometry(QtCore.QRect(130, 20, 101, 31))
         font = QtGui.QFont()
@@ -61,8 +64,16 @@ class Ui_MainWindow(object):
         font.setWeight(50)
         self.addProxyButton.setFont(font)
         self.addProxyButton.setObjectName("addProxyButton")
-        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
 
+        font = QtGui.QFont()
+        font.setFamily("Yu Gothic")
+        font.setPointSize(10)
+        font.setBold(False)
+        font.setWeight(50)
+        self.addProxyButton.setFont(font)
+        self.addProxyButton.setObjectName("addProxyButton")
+
+        self.tableWidget = QtWidgets.QTableWidget(self.centralwidget)
         # 3rd and 4th parameters use to set width and height of the Table Widget
         self.tableWidget.setGeometry(QtCore.QRect(30, 130, 1439, 411))
 
@@ -145,9 +156,15 @@ class Ui_MainWindow(object):
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
+        # NEW - Right click menu
+        self.tableWidget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tableWidget.customContextMenuRequested.connect(self.showContextMenu)
+
+
         # new
         self.addAccountButton.clicked.connect(self.add_accounts_from_file)
         self.addProxyButton.clicked.connect(self.add_proxies_from_file)
+        
         
         self.column_order = ["tds_username", "tds_pass", "face_uid", "face_pass", "cookie", "token", "proxy", "user_agent", "tds_coins",  "status",  "action"]
 
@@ -159,8 +176,6 @@ class Ui_MainWindow(object):
         self.threadpool = QThreadPool()
         print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
 
-        # NEW
-        self.traodoisub = Traodoisub()
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
@@ -197,244 +212,66 @@ class Ui_MainWindow(object):
 
         self.label.setText(_translate("MainWindow", "File:"))
 
+    def showContextMenu(self, pos):
+        selected_rows = set(index.row() for index in self.tableWidget.selectionModel().selectedRows())
 
-    def __tds_get_cookie(self, username: str, password: str, proxy_string = None) -> str:
-        # I'm Working here...
-        target_url = "https://traodoisub.com/scr/login.php"
+        if len(selected_rows) > 0:
+            # Convert the widget coordinates to global coordinates
+            global_pos = self.tableWidget.mapToGlobal(pos)
 
-        form_data = {
-            "username": username,
-            "password": password,
-        }
+            # Create a context menu
+            context_menu = QMenu(self.tableWidget)
 
-        if proxy_string:
-            # Parse the proxy components
-            ip, port, username, password = proxy_string.split(":")
-            proxy_url = f"http://{username}:{password}@{ip}:{port}"
+            # Add title action (disabled and with a different font)
+            title_action = context_menu.addAction("Actions:")
+            title_action.setEnabled(False)
+            title_font = title_action.font()
+            title_font.setBold(True)
+            title_action.setFont(title_font)
+            title_action.setEnabled(False)
 
-            proxies = {
-                "http": proxy_url,
-                "https": proxy_url,
-            }
+            # Add actions to the context menu
+            action_save_profile = QAction("Save profile", self.tableWidget)
 
-            # Make a request using the proxy
-            response = requests.post(target_url, data=form_data, proxies=proxies)
-        else:
-            # Make a request without using the proxy
-            response = requests.post(target_url, data=form_data)
+            # Connect actions to slots (you can implement your own slots)
+            action_save_profile.triggered.connect(lambda: self.login_and_save_profile(selected_rows))
 
-        cookie_string = ""
+            # Add actions to the context menu
+            context_menu.addAction(action_save_profile)
 
-        for key, value in response.cookies.items():
-            cookie_string = f"{key}={value};"
-        
-        return cookie_string
-    
-    def __tds_get_token(self, cookie: str) -> str:
-        cookie_string = cookie.strip(";")
+            # Show the context menu at the global position
+            context_menu.exec_(global_pos)
 
-        # Split the cookie string into key and value
-        cookie_key, cookie_value = cookie_string.split('=')
-
-        # Create a dictionary with the cookie
-        cookies = {cookie_key: cookie_value}
-
-        # Make the request with the cookies
-        response = requests.get("https://traodoisub.com/view/setting/load.php", cookies=cookies)
-
-        response = response.json()
-
-        tds_token, tds_coins = response["tokentds"], response["xu"]
-
-        return tds_token, tds_coins
-    
-    
-    def __tds_configure_facebook(self, facebook_id="", tds_token="", proxy_string = None):
-        # response = requests.get(f'https://traodoisub.com/api/?fields=run&id={facebook_id}&access_token={tds_token}')
-        # EX: https://traodoisub.com/api/?fields=run&id=100012702276792&access_token=TDS9JCOyVmdlNnI6IiclZXZzJCLiEzYjFGdzVGdzRGdiojIyV2c1Jye
-        print('tds_token', tds_token)
-
-        target_url = f"{self.base_url}/api/?fields=run&id={facebook_id}&access_token={tds_token}"
-
-        if proxy_string:
-            # Parse the proxy components
-            ip, port, username, password = proxy_string.split(":")
-            proxy_url = f"http://{username}:{password}@{ip}:{port}"
-
-            proxies = {
-                "http": proxy_url,
-                "https": proxy_url,
-            }
-
-            # Make a request using the proxy
-            response = requests.get(target_url, proxies=proxies)
-        else:
-            # Make a request without the proxy
-            response = requests.get(target_url)
-
-        print("__tds_configure_facebook - response: ", response.json())
-
-    # GET jobs with access token
-    def __tds_get_facebook_jobs(self, tds_token="", proxy_string=None):
-
-        target_url = f"{self.base_url}/api/?fields=like&access_token={tds_token}"
-        
-
-        if proxy_string:
-            # Parse the proxy components
-            ip, port, username, password = proxy_string.split(":")
-            proxy_url = f"http://{username}:{password}@{ip}:{port}"
-
-            proxies = {
-                "http": proxy_url,
-                "https": proxy_url,
-            }
-
-            # Make a request using the proxy
-            response = requests.get(target_url, proxies=proxies)
-        else:
-            response = requests.get(target_url)
-
-        jobs = response.json()
-
-        print('-------------------------------------')
-        print('Jobs list:', jobs)
-        print('-------------------------------------')
-
-        if isinstance(jobs, dict):
-            return []
-
-        return jobs
-
-
-    def __tds_get_job_coins(self, job_id="", tds_token="", proxy_string=None, cookie=""):
-        target_url = f"{self.base_url}/ex/like/nhantien.php"
-
-        cookie_string = cookie.strip(";")
-
-        # Split the cookie string into key and value
-        cookie_key, cookie_value = cookie_string.split('=')
-
-        # Create a dictionary with the cookie
-        cookies = {cookie_key: cookie_value}
-        
-
-        form_data = {
-            'id': job_id,
-            'type': "like",
-        }
-
-        if proxy_string:
-            # Parse the proxy components
-            ip, port, username, password = proxy_string.split(":")
-            proxy_url = f"http://{username}:{password}@{ip}:{port}"
-
-            proxies = {
-                "http": proxy_url,
-                "https": proxy_url,
-            }
-
-            # Make a request using the proxy
-            response = requests.post(target_url, proxies=proxies, cookies=cookies, data=form_data)
-        else:
-            response = requests.post(target_url, cookies=cookies, data=form_data)
-        try:
-            print('Get coins response: ', response.text)
-        except:
-            pass
-
-    # threading.Thread(target=self._worker.open_new_tab_and_interact, 
-    #                              kwargs={'url': f'{base_url}/{job["id"]}', 'like': True, 'comment': False, 'tab_order': (i+1), 'delay': 10}
-    #                              , daemon=True).start()
-
-    def __tds_auto_like_posts(self, jobs = [], row=None, cookie=""):
-        base_url = "https://www.facebook.com"
-
-        # jobs = [{'id': '100005530068181_2291432671051046'}, {'id': '100070511743424_402580498769005'}, {'id': '100091316545864_281386974915185'}, {'id': '100029138540920_1147772919537315'}]
-
-        if len(jobs) > 0:
-            for i, job in enumerate(jobs):
-                threading.Thread(target=self._worker.open_new_tab_and_interact)
-                self._worker.open_new_tab_and_interact(url=f'{base_url}/{job["id"]}', like=True, comment=False, tab_order=(i+1), delay=10)
-                self.__tds_get_job_coins(job_id=job["id"], cookie=cookie)
-
-        self._worker.clear_browser()
-
-        __, tds_coins = self.__tds_get_token(cookie=cookie)
-
-        self.changeCellValue(row, self.column_order.index('tds_coins'), newValue=tds_coins)
-
-
+    def login_and_save_profile(self, selected_rows):
+        print(f"Login and save profile for rows {', '.join(map(str, selected_rows))}")
 
     def on_run_button_clicked(self, row, col):
-        # _______________GET TDS COOKIE________________
-        # username = self.accounts[row]["tds_username"]
-        # password = self.accounts[row]["tds_pass"]
-        # proxy_string = self.accounts[row]["proxy"]
-        # tds_cookie = self.__tds_get_cookie(username=username, password=password)
-        # print('tds_cookie', tds_cookie)
-        # self.accounts[row]["tds_cookie"] = tds_cookie
+        if len(self.accounts[row]['proxy']) == 0:
+            self.changeCellValue(row=row, col=self.column_order.index('status'), newValue='Lỗi xảy ra: Hãy thêm proxies trước!')
+        else:
+            # _______________USE SELENIUM-FACEBOOK-WORKER_________________
+            facebook_login_credential = {
+                "uid": self.accounts[row]["face_uid"],
+                "password": self.accounts[row]["face_pass"],
+                "fa_secret": self.accounts[row]["face_secret"],
+            }
 
+            tds_login_credential = {
+                'username': self.accounts[row]['tds_username'],
+                'password': self.accounts[row]['tds_pass']
+            }
 
-        # ________________GET TDS TOKEN_________________
-        # tds_token, tds_coins = self.__tds_get_token(cookie=tds_cookie)
-        # self.accounts[row]["tds_token"] = tds_token
-        # self.accounts[row]["tds_coins"] = tds_coins
-        # # update table with coins
-        # self.add_accounts_to_table(self.accounts)
+            proxy = self.split_proxies(self.accounts[row]['proxy'])
 
-
-        # add a facebook to the tds account
-        # self.__tds_configure_facebook(facebook_id="61552920328465", tds_token=tds_token)
-
-
-
-        # _______________GET FACEBOOK JOBS_______________
-        # jobs = self.__tds_get_facebook_jobs(tds_token=tds_token)
-
-
-        
-
-        # _______________USE SELENIUM-FACEBOOK-WORKER_________________
-        facebook_login_credential = {
-            "uid": self.accounts[row]["face_uid"],
-            "password": self.accounts[row]["face_pass"],
-            "fa_secret": self.accounts[row]["face_secret"],
-        }
-
-        tds_login_credential = {
-            'username': self.accounts[row]['tds_username'],
-            'password': self.accounts[row]['tds_pass']
-        }
-        
-        action = {'type': 'like', 'jobs': []}
-
-        facebook_worker = SeleniumWorker(facebook_login_credential=facebook_login_credential,
-                                         tds_login_credential=tds_login_credential,
-                                         action=action)
-        facebook_worker.signals.result.connect(lambda result: self.display_result(result, row))
-        facebook_worker.signals.error.connect(lambda error: self.display_error(error, row))
-        facebook_worker.signals.coins.connect(lambda coins: self.display_coins(coins, row))
-        # Execute the worker in the thread pool
-        self.threadpool.start(facebook_worker)
-
-
-
-
-        # Run selenium to like post and get money
-        # my_thread.join()
-        # my_thread = threading.Thread(target = self.__tds_auto_like_posts, kwargs={'jobs': jobs, 'row': row, 'cookie': tds_cookie}, daemon=True)
-        # my_thread.start()
-        # self.__tds_auto_like_posts(jobs=jobs, row=row,cookie=tds_cookie)
-
-        
-
-
-
-
-
-        
-
+            facebook_worker = SeleniumWorker(facebook_login_credential=facebook_login_credential,
+                                            tds_login_credential=tds_login_credential,
+                                            proxy=proxy
+                                            )
+            facebook_worker.signals.result.connect(lambda result: self.display_result(result, row))
+            facebook_worker.signals.error.connect(lambda error: self.display_error(error, row))
+            facebook_worker.signals.coins.connect(lambda coins: self.display_coins(coins, row))
+            # Execute the worker in the thread pool
+            self.threadpool.start(facebook_worker)
     
     def display_result(self, result, row):
         print('result:', result)
@@ -539,6 +376,11 @@ class Ui_MainWindow(object):
             self.accounts.append(account_obj)
         return self.accounts
     
+
+    def split_proxies(self, proxy_string:str)->dict:
+        host, port, username, password = proxy_string.split(':')
+
+        return {'host': host, 'port': port, 'username': username, 'password': password}
     
     def add_proxies_from_file(self):
         try:

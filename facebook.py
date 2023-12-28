@@ -28,9 +28,7 @@ class SeleniumWorker(QRunnable):
 
     # actions list will be like this: {'type': 'like', 'jobs': ['url_1', 'url_2', ...]}
 
-    
-
-    def __init__(self, facebook_login_credential: dict, tds_login_credential: dict, action: dict):
+    def __init__(self, facebook_login_credential: dict, tds_login_credential: dict, proxy: dict):
         super(SeleniumWorker, self).__init__()
 
         # new
@@ -39,20 +37,21 @@ class SeleniumWorker(QRunnable):
         # new
         self.tds_login_credential = tds_login_credential
 
-        self.action = action
+        # new
+        self.proxy = proxy
+
 
         self.signals = WorkerSignals()
 
-        self.traodoisub = Traodoisub()
+        self.traodoisub = Traodoisub(proxy=proxy)
 
-        self.driver = get_chromedriver(use_proxy=False, user_agent=None, host=None, port=None, username=None, password=None)
+        self.driver = get_chromedriver(proxy=proxy)
 
 
     @pyqtSlot()
     def run(self):
         try:
-            # Initialize Selenium WebDriver (you may need to adjust the path to your WebDriver)
-            # driver = webdriver.Chrome()
+
 
             # Perform some simple action (e.g., login facebook, get tds_cookie, etc...)
             self.login()
@@ -64,33 +63,54 @@ class SeleniumWorker(QRunnable):
             tds_cookie = self.traodoisub.get_cookie(username=self.tds_login_credential['username'], 
                                                     password=self.tds_login_credential['password'])
             
-            self.signals.result.emit(f'tds_cookie: {tds_cookie}')
             
-            # ________________GET TDS TOKEN_________________
+            # ________________GET TDS TOKEN AND COINS_________________
             tds_token, tds_coins = self.traodoisub.get_token(cookie=tds_cookie)
             # update table with coins
             self.signals.coins.emit(tds_coins)
 
 
-            # time.sleep(1000)
+            # add a facebook to the tds account
+            # facebook_id_res = self.traodoisub.get_facebook_id(url=f'https://www.facebook.com/{self.facebook_login_credential["uid"]}')
+            
+            # fa_conf_res = self.traodoisub.configure_facebook(cookie=tds_cookie, facebook_id=facebook_id_res['id'])
 
-
-            # target_url = "https://www.facebook.com"
-
-            # if self.action['type'] == 'like' and len(self.action['jobs']) > 0:
-            #     self.signals.result.emit('Executing jobs from TRAODOISUB...')
-            #     jobs = self.action['jobs']
-
-            #     for i, job in enumerate(jobs):
-            #         self.open_new_tab_and_interact(url=f'{target_url}/{job["id"]}', like=True, tab_order=(i+1), delay=10)
-            #         job_id, response_msg = self.traodoisub.get_job_coins(job_id=job["id"], tds_cookie=self.tds_cookie)
-            #         msg = f"Job ID: {job_id} - {response_msg}"
-            #         self.signals.result.emit(msg)
-
+            # if fa_conf_res != '1':
+            #     return self.signals.result.emit(f'Cấu hình facebook xảy ra lỗi! {str(fa_conf_res)}')
+            # else:
+            #     return self.signals.result.emit(f'Cấu hình facebook thành công! {str(fa_conf_res)}')
             
 
-            # Emit the result signal
-            # self.signals.result.emit(f"Task completed for {self.url}")
+            time.sleep(2)
+
+            # # _______________GET FACEBOOK JOBS_______________
+            jobs = self.traodoisub.get_facebook_jobs(tds_token=tds_token)
+            if isinstance(jobs, dict):
+                return self.signals.result.emit(f"Lỗi khi lấy jobs: {jobs['error']} - Count-down:{jobs['countdown']}")
+            else:
+                target_url = "https://www.facebook.com"
+
+                self.signals.result.emit('Chuẩn bị thực hiện các jobs...')
+                
+                success_count = 0
+
+                for i, job in enumerate(jobs):
+                    self.open_new_tab_and_interact(url=f'{target_url}/{job["id"]}', like=True, tab_order=(i+1), delay=10)
+                    job_id, response_msg = self.traodoisub.get_job_coins(job_id=job["id"], tds_cookie=tds_cookie)
+                    if str(response_msg) == '2':
+                        response_msg = 'Thành công'
+                        success_count += 1
+                    else:
+                        response_msg = 'Thất bại'
+                    
+                    msg = f"Job ID: {job_id} - {response_msg}"
+                    self.signals.result.emit(msg)
+                
+                self.signals.result.emit(f'Hoàn thành thành công {success_count}/{len(jobs)} jobs!')
+
+                # ________________GET TDS TOKEN_________________
+                _, tds_coins = self.traodoisub.get_token(cookie=tds_cookie)
+                return self.signals.coins.emit(tds_coins)
 
         except Exception as e:
             # Emit the error signal if an exception occurs

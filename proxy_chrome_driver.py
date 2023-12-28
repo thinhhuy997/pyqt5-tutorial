@@ -62,18 +62,19 @@ def init_proxy_config(PROXY_HOST, PROXY_PORT, PROXY_USER, PROXY_PASS):
 
 
 
-def get_chromedriver(use_proxy=False, user_agent=None, host = None, port = None, username = None, password = None):
+def get_chromedriver(proxy:dict, *, user_agent=None):
     # path = os.path.dirname(os.path.abspath(__file__))
     chrome_options = webdriver.ChromeOptions()
-    if use_proxy:
-        pluginfile = 'proxy_auth_plugin.zip'
 
-        proxy_config = init_proxy_config(host, port, username, password)
+    pluginfile = 'proxy_auth_plugin.zip'
 
-        with zipfile.ZipFile(pluginfile, 'w') as zp:
-            zp.writestr("manifest.json", proxy_config[0])
-            zp.writestr("background.js", proxy_config[1])
-        chrome_options.add_extension(pluginfile)
+    proxy_config = init_proxy_config(proxy['host'], proxy['port'], proxy['username'], proxy['password'])
+
+    with zipfile.ZipFile(pluginfile, 'w') as zp:
+        zp.writestr("manifest.json", proxy_config[0])
+        zp.writestr("background.js", proxy_config[1])
+    chrome_options.add_extension(pluginfile)
+
     if user_agent:
         chrome_options.add_argument('--user-agent=%s' % user_agent)
     

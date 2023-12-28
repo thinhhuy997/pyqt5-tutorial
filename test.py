@@ -1,95 +1,73 @@
 import sys
-import time
-from PyQt5.QtCore import Qt, QRunnable, QObject, pyqtSlot, pyqtSignal, QThreadPool
-from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QLabel, QWidget
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QMenu, QAction
+from PyQt5.QtCore import Qt
 
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
+class MyTableWidget(QTableWidget):
+    def __init__(self):
+        super().__init__()
 
-class WorkerSignals(QObject):
-    finished = pyqtSignal()
-    error = pyqtSignal(tuple)
-    result = pyqtSignal(object)
+        self.setColumnCount(3)
+        self.setRowCount(5)
 
-class SeleniumWorker(QRunnable):
-    def __init__(self, url):
-        super(SeleniumWorker, self).__init__()
-        self.url = url
-        self.signals = WorkerSignals()
+        for i in range(5):
+            for j in range(3):
+                item = QTableWidgetItem(f"Row {i+1}, Col {j+1}")
+                self.setItem(i, j, item)
 
-    @pyqtSlot()
-    def run(self):
-        try:
-            # Initialize Selenium WebDriver (you may need to adjust the path to your WebDriver)
-            driver = webdriver.Chrome()
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.showContextMenu)
 
-            # Open the provided URL
-            driver.get(self.url)
+    def showContextMenu(self, pos):
+        selected_rows = set(index.row() for index in self.selectionModel().selectedRows())
 
-            # Perform some simple action (e.g., searching on Google)
-            search_box = driver.find_element("name", "q")
-            search_box.send_keys("PyQt5 QThreadPool example")
-            search_box.send_keys(Keys.RETURN)
+        if len(selected_rows) > 0:
+            # Convert the widget coordinates to global coordinates
+            global_pos = self.mapToGlobal(pos)
 
-            # Simulate a delay (e.g., to simulate a time-consuming task)
-            time.sleep(5)
+            # Create a context menu
+            context_menu = QMenu(self)
 
-            # Emit the result signal
-            self.signals.result.emit(f"Task completed for {self.url}")
+            # Add title action (disabled and with a different font)
+            title_action = context_menu.addAction("Actions:")
+            title_action.setEnabled(False)
+            title_font = title_action.font()
+            title_font.setBold(True)
+            title_action.setFont(title_font)
+            title_action.setEnabled(False)
 
-        except Exception as e:
-            # Emit the error signal if an exception occurs
-            self.signals.error.emit((type(e), e.args))
+            # Add actions to the context menu
+            action_edit = QAction("Edit", self)
+            action_delete = QAction("Delete", self)
 
-        finally:
-            # Close the WebDriver
-            driver.quit()
+            # Connect actions to slots (you can implement your own slots)
+            action_edit.triggered.connect(lambda: self.editRows(selected_rows))
+            action_delete.triggered.connect(lambda: self.deleteRows(selected_rows))
 
-            # Emit the finished signal
-            self.signals.finished.emit()
+            # Add actions to the context menu
+            context_menu.addAction(action_edit)
+            context_menu.addAction(action_delete)
+
+            # Show the context menu at the global position
+            context_menu.exec_(global_pos)
+
+    def editRows(self, selected_rows):
+        print(f"Edit rows {', '.join(map(str, selected_rows))}")
+
+    def deleteRows(self, selected_rows):
+        print(f"Delete rows {', '.join(map(str, selected_rows))}")
 
 class MainWindow(QMainWindow):
     def __init__(self):
-        super(MainWindow, self).__init__()
+        super().__init__()
 
-        self.central_widget = QLabel("Click the button to start tasks.")
-        self.central_widget.setAlignment(Qt.AlignCenter)
+        self.tableWidget = MyTableWidget()
+        self.setCentralWidget(self.tableWidget)
 
-        self.start_button = QPushButton("Start Tasks")
-        self.start_button.clicked.connect(self.start_tasks)
+        self.setGeometry(100, 100, 600, 400)
+        self.setWindowTitle('Right-Click Example')
+        self.show()
 
-        layout = QVBoxLayout()
-        layout.addWidget(self.central_widget)
-        layout.addWidget(self.start_button)
-
-        container = QWidget()
-        container.setLayout(layout)
-        self.setCentralWidget(container)
-
-        self.threadpool = QThreadPool()
-        print("Multithreading with maximum %d threads" % self.threadpool.maxThreadCount())
-
-    def start_tasks(self):
-        urls = ["https://www.google.com", "https://www.yahoo.com", "https://www.bing.com"]
-
-        for url in urls:
-            worker = SeleniumWorker(url)
-            worker.signals.result.connect(self.display_result)
-            worker.signals.error.connect(self.display_error)
-
-            # Execute the worker in the thread pool
-            self.threadpool.start(worker)
-
-    def display_result(self, result):
-        current_text = self.central_widget.text()
-        self.central_widget.setText(f"{current_text}\n{result}")
-
-    def display_error(self, error):
-        current_text = self.central_widget.text()
-        self.central_widget.setText(f"{current_text}\nError: {error}")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-    main_window = MainWindow()
-    main_window.show()
+    window = MainWindow()
     sys.exit(app.exec_())
